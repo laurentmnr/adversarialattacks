@@ -19,11 +19,12 @@ class CNN(object):
                  epoch=25,
                  beta=.5,
                  model_name='CNN',
-                 checkpoint_dir="checkpoint"):
+                 checkpoint_dir="checkpoint",
+                 lambda_loss=0):
 
         self.sess = sess
 
-        self.lambda_loss = 0
+        self.lambda_loss = lambda_loss
 
         # Training params
         self.batch_size = batch_size

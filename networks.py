@@ -33,7 +33,7 @@ def network_mnist(images,input_shape,y_dim,mode):
 
     # Dense Layer
     pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
-    dense = tf.layers.dense(inputs=pool2_flat, units=128, activation=tf.nn.relu)
+    dense = tf.layers.dense(inputs=pool2_flat, units=32, activation=tf.nn.relu, name='embedding')
 
     if mode == "TRAIN":
         dropout = tf.layers.dropout(inputs=dense, rate=0.4)
@@ -44,7 +44,7 @@ def network_mnist(images,input_shape,y_dim,mode):
     logits = tf.layers.dense(inputs=dropout, units=y_dim,name='logits')
 
     #Returns logits and representer
-    return logits,tf.gradients(dense,input_layer)
+    return logits
 
 def cross_entropy_loss(logits, labels):
     """Cross entropy loss
@@ -72,9 +72,10 @@ def representer_grad_loss(grad_representer):
     Returns:
     tr(grad(rep).T*grad(rep))
     """
-    return tf.reduce_mean(tf.reduce_sum(tf.multiply(grad_representer, grad_representer),axis=[1,2]))
+    return tf.reduce_mean(tf.reduce_sum(tf.multiply(grad_representer, grad_representer),axis=[1,2,3,4]))
 
 def accuracy(y_pred,y):
     correct_prediction = tf.equal(tf.argmax(y_pred,1), tf.argmax(y, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     return accuracy
+

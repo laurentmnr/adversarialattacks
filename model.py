@@ -23,7 +23,7 @@ class CNN(object):
 
         self.sess = sess
 
-        self.lambda_loss = 0.8
+        self.lambda_loss = 0
 
         # Training params
         self.batch_size = batch_size
@@ -47,16 +47,24 @@ class CNN(object):
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate, beta1=self.beta) \
             .minimize(self.global_loss, var_list=self.vars)
 
-        files = os.listdir("./logs_train")
-        for file in files:
-            os.remove("./logs_train" + '/' + file)
 
-        files = os.listdir("./logs_val")
+        if not os.path.exists("./logs_train"+model_name):
+            os.makedirs("./logs_train"+model_name)
+        files = os.listdir("./logs_train"+model_name)
         for file in files:
-            os.remove("./logs_val" + '/' + file)
+            os.remove("./logs_train" +model_name +'/' + file)
 
-        self.writer_train = tf.summary.FileWriter("./logs_train", self.sess.graph)
-        self.writer_val = tf.summary.FileWriter("./logs_val", self.sess.graph)
+        if not os.path.exists("./logs_val"+model_name):
+            os.makedirs("./logs_val"+model_name)
+        files = os.listdir("./logs_val"+model_name)
+        for file in files:
+            os.remove("./logs_val"+model_name + '/' + file)
+
+        self.writer_train = tf.summary.FileWriter("./logs_train"+model_name, self.sess.graph)
+        self.writer_val = tf.summary.FileWriter("./logs_val"+model_name, self.sess.graph)
+
+        if self.lambda_loss==0:
+            self.writer_grad_val = tf.summary.FileWriter("./logs_grad" + model_name, self.sess.graph)
 
         try:
             tf.global_variables_initializer().run()
@@ -82,17 +90,22 @@ class CNN(object):
             tf.int64, [None, self.num_labels], name='labels')
         labels = self.labels
 
-        self.network,self.grad_rep = networks.network_mnist(inputs, self.input_shape, self.num_labels, self.mode)
-
+        self.network = networks.network_mnist(inputs, self.input_shape, self.num_labels, self.mode)
         self.network_sum = tf.summary.histogram("cnn", self.network)
 
         self.loss_1 = networks.cross_entropy_loss(self.network, labels)
-        self.loss_2=networks.representer_grad_loss(self.grad_rep)
-
         self.loss_1_sum = tf.summary.scalar("cross_entropy_loss", self.loss_1)
-        self.loss_2_sum = tf.summary.scalar("representer_grad_loss", self.loss_2)
+        self.embed = tf.get_default_graph().get_tensor_by_name("embedding/Relu:0")
 
-        self.global_loss = self.loss_1+self.lambda_loss*self.loss_2
+        pp = [-1] + self.input_shape + [1]
+        self.gradient_embedding = tf.concat([tf.reshape(
+            tf.gradients(self.embed[:, i], inputs)[0], pp) for i in range(self.embed.shape[1])], axis=4)
+        self.loss_2 = networks.representer_grad_loss(self.gradient_embedding)
+        if self.lambda_loss!=0:
+            self.loss_2_sum = tf.summary.scalar("representer_grad_loss", self.loss_2)
+            self.global_loss = self.loss_1+self.lambda_loss*self.loss_2
+        else:
+            self.global_loss = self.loss_1
         self.loss_sum = tf.summary.scalar("global_loss", self.global_loss)
 
         self.vars = tf.trainable_variables()
@@ -103,6 +116,8 @@ class CNN(object):
         self.acc_sum = tf.summary.scalar("accuracy", self.acc)
 
         self.summary = tf.summary.merge_all()
+        if self.lambda_loss==0:
+            self.loss_2_sum = tf.summary.scalar("representer_grad_loss", self.loss_2)
 
     def train(self, X, y,cv=0.05):
 
@@ -139,16 +154,22 @@ class CNN(object):
                     self.labels: batch_labels,
                     self.mode: "TRAIN"
                 })
-                err_2 = self.loss_2.eval({
-                    self.inputs: batch_images,
-                    self.labels: batch_labels,
-                    self.mode: "TRAIN"
-                })
+                if self.lambda_loss != 0:
+                    err_2 = self.loss_2.eval({
+                        self.inputs: batch_images,
+                        self.labels: batch_labels,
+                        self.mode: "TRAIN"
+                    })
                 if np.mod(idx, 10) == 0:
 
-                    print("Epoch: [%2d/%2d] [%4d/%4d] time: %4.4f,loss_1: %.8f, loss_2: %.8f" \
-                          % (epoch, self.epoch, idx, batch_idxs,
-                             (time.time() - start_time), err_1, err_2))
+                    if self.lambda_loss!=0:
+                        print("Epoch: [%2d/%2d] [%4d/%4d] time: %4.4f,loss_1: %.8f, loss_2: %.8f" \
+                              % (epoch, self.epoch, idx, batch_idxs,
+                                 (time.time() - start_time), err_1, err_2))
+                    else:
+                        print("Epoch: [%2d/%2d] [%4d/%4d] time: %4.4f,loss_1: %.8f, loss_2: %.8f" \
+                              % (epoch, self.epoch, idx, batch_idxs,
+                                 (time.time() - start_time), err_1, err_1))
 
                     summary_str_val = self.sess.run(self.summary,
                                                    feed_dict={
@@ -160,6 +181,13 @@ class CNN(object):
 
                 i += 1
 
+            summary_str_grad_val = self.sess.run(self.loss_2_sum,
+                                                feed_dict={
+                                                self.inputs: Xval.reshape(tuple([-1] + self.input_shape)),
+                                                self.labels: yval,
+                                                self.mode: "TEST"})
+
+            self.writer_grad_val.add_summary(summary_str_grad_val, i)
             self.save(counter)
             counter += 1
 

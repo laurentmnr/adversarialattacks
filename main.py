@@ -1,4 +1,5 @@
 import mnist
+
 from model import *
 import matplotlib.pyplot as plt
 import os
@@ -16,12 +17,13 @@ b = np.zeros((len(a), 10))
 b[np.arange(len(a)), a] = 1
 train_labels = b
 
-test_images = mnist.test_images()#/255
-test_labels = mnist.test_labels()
+test_images = mnist.test_images()/255
+test_labels = mnist.test_labels()/255
 
 
 
 # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
+
 run_config = tf.ConfigProto()
 run_config.gpu_options.allow_growth = True
 
@@ -33,7 +35,7 @@ cnn = CNN(sess,
             epoch=20,
             learning_rate=0.002,
             beta=.5,
-            model_name='CNN0000',
+            model_name='CNN',
             checkpoint_dir="checkpoint")
 
 

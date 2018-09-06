@@ -80,9 +80,12 @@ class CNN(object):
             self.counter = 0
             print(" [!] Load failed...")
 
+
+
     def build_model(self):
         self.mode=tf.placeholder(tf.string, name='mode')
-
+        self.noise=tf.placeholder(
+            tf.float32, [3], name='noise')
         self.inputs = tf.placeholder(
             tf.float32, [None] + self.input_shape, name='inputs')
         inputs = self.inputs
@@ -91,7 +94,7 @@ class CNN(object):
             tf.int64, [None, self.num_labels], name='labels')
         labels = self.labels
 
-        self.network = networks.network_mnist(inputs, self.input_shape, self.num_labels, self.mode)
+        self.network = networks.network_mnist(inputs, self.input_shape, self.num_labels, self.mode, self.noise)
         self.network_sum = tf.summary.histogram("cnn", self.network)
 
         self.loss_1 = networks.cross_entropy_loss(self.network, labels)
@@ -147,19 +150,22 @@ class CNN(object):
                                                feed_dict={
                                                    self.inputs: batch_images,
                                                    self.labels: batch_labels,
-                                                   self.mode: "TRAIN"})
+                                                   self.mode: "TRAIN",
+                                                   self.noise:np.zeros(3)})
                 self.writer_train.add_summary(summary_str, i)
 
                 err_1 = self.loss_1.eval({
                     self.inputs: batch_images,
                     self.labels: batch_labels,
-                    self.mode: "TRAIN"
+                    self.mode: "TRAIN",
+                    self.noise: np.zeros(3)
                 })
                 if self.lambda_loss != 0:
                     err_2 = self.loss_2.eval({
                         self.inputs: batch_images,
                         self.labels: batch_labels,
-                        self.mode: "TRAIN"
+                        self.mode: "TRAIN",
+                        self.noise: np.zeros(3)
                     })
                 if np.mod(idx, 10) == 0:
 
@@ -176,7 +182,8 @@ class CNN(object):
                                                    feed_dict={
                                                        self.inputs: Xval.reshape(tuple([-1] + self.input_shape)),
                                                        self.labels: yval,
-                                                       self.mode: "TEST"})
+                                                       self.mode: "TEST",
+                                                       self.noise: np.zeros(3)})
 
                     self.writer_val.add_summary(summary_str_val, i)
 
@@ -186,16 +193,18 @@ class CNN(object):
                                                 feed_dict={
                                                 self.inputs: Xval.reshape(tuple([-1] + self.input_shape)),
                                                 self.labels: yval,
-                                                self.mode: "TEST"})
+                                                self.mode: "TEST",
+                                                self.noise: np.zeros(3)})
 
             self.writer_grad_val.add_summary(summary_str_grad_val, i)
             self.save(counter)
             counter += 1
 
-    def predict(self, X):
+    def predict(self, X, noise=np.zeros(3)):
         return self.sess.run(self.network, feed_dict={
                                 self.inputs: X.reshape(tuple([-1]+self.input_shape)),
-                                self.mode: "TEST"
+                                self.mode: "TEST",
+                                self.noise: noise
                             })
 
     def save(self,step):
